@@ -1,0 +1,182 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{geometry}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{caption}
+
+\geometry{margin=1in}
+
+\definecolor{codegray}{rgb}{0.95,0.95,0.95}
+
+\lstset{
+    backgroundcolor=\color{codegray},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single
+}
+
+\title{An Examination of First-Device Identification in Player Activity Logs}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document investigates the computational task of identifying the first device used by each player within a longitudinal activity log. Given a schema capturing player identifiers, device identifiers, timestamps, and gameplay metrics, the goal is to determine the device associated with each player's earliest recorded login. Solutions are presented using SQL and the Python Pandas library, along with complexity analysis, algorithmic explanation, and edge-case discussion.
+\end{abstract}
+
+\section{Introduction}
+
+Player activity datasets often contain multiple login entries per user, each tied to a specific device and event date. To analyze onboarding behavior or device preference patterns, it is necessary to isolate the device corresponding to each player's earliest event. This task can be formulated as a grouped minimum selection followed by alignment between aggregated timestamps and original records.
+
+Two analytical approaches are examined:
+
+\begin{enumerate}
+    \item SQL aggregation followed by an equi-join.
+    \item Pandas \texttt{groupby} and \texttt{merge} operations.
+\end{enumerate}
+
+\section{Data Description}
+
+The \textbf{Activity} table has the following schema:
+
+\begin{verbatim}
+player_id    integer
+device_id    integer
+event_date   date
+games_played integer
+PRIMARY KEY (player_id, event_date)
+\end{verbatim}
+
+An example dataset is shown below:
+
+\begin{verbatim}
+player_id | device_id | event_date  | games_played
+---------------------------------------------------
+1         | 2         | 2016-03-01  | 5
+1         | 2         | 2016-05-02  | 6
+2         | 3         | 2017-06-25  | 1
+3         | 1         | 2016-03-02  | 0
+3         | 4         | 2018-07-03  | 5
+\end{verbatim}
+
+Desired output:
+
+\begin{verbatim}
+player_id | device_id
+1         | 2
+2         | 3
+3         | 1
+\end{verbatim}
+
+\section{SQL Methodology}
+
+\subsection{Algorithmic Strategy}
+
+The SQL procedure consists of:
+\begin{enumerate}
+    \item Computing the earliest event date per player.
+    \item Joining this result with the original table to recover the associated device.
+\end{enumerate}
+
+\subsection{SQL Implementation}
+
+\begin{lstlisting}[language=SQL]
+SELECT a.player_id, a.device_id
+FROM Activity a
+JOIN (
+    SELECT player_id, MIN(event_date) AS first_login
+    FROM Activity
+    GROUP BY player_id
+) t
+ON a.player_id = t.player_id
+AND a.event_date = t.first_login;
+\end{lstlisting}
+
+\subsection{Explanation}
+
+The subquery computes minimal timestamps per player. The join condition ensures that only records matching both the player and the earliest login timestamp are selected.
+
+\section{Pandas Methodology}
+
+\subsection{Algorithmic Strategy}
+
+The Pandas approach mirrors the relational workflow:
+\begin{enumerate}
+    \item Partition rows by \texttt{player\_id}.
+    \item Compute the minimal \texttt{event\_date} per group.
+    \item Merge the aggregated data with the original table to retrieve the device identifier.
+\end{enumerate}
+
+\subsection{Pandas Implementation}
+
+\begin{lstlisting}[language=Python]
+import pandas as pd
+
+def game_analysis(activity: pd.DataFrame) -> pd.DataFrame:
+    # Step 1: identify earliest login per player
+    first_login = (
+        activity.groupby("player_id", as_index=False)["event_date"]
+                .min()
+                .rename(columns={"event_date": "first_login"})
+    )
+
+    # Step 2: merge minimal dates back to original rows
+    result = (
+        first_login.merge(
+            activity,
+            left_on=["player_id", "first_login"],
+            right_on=["player_id", "event_date"]
+        )[["player_id", "device_id"]]
+    )
+
+    return result
+\end{lstlisting}
+
+\subsection{Explanation}
+
+The \texttt{groupby} operation identifies the earliest event for each player. The merge aligns the aggregated results with original data, allowing extraction of the correct \texttt{device\_id}.
+
+\section{Computational Complexity}
+
+Let $n$ denote the number of rows and $k$ the number of unique players.
+
+\subsection{SQL Complexity}
+
+\begin{itemize}
+    \item Group aggregation: $O(n)$.
+    \item Join with appropriate indices: $O(n)$.
+\end{itemize}
+
+Total runtime: linear in the dataset size.
+
+\subsection{Pandas Complexity}
+
+\begin{itemize}
+    \item \texttt{groupby} + \texttt{min}: $O(n)$, with $O(k)$ memory.
+    \item \texttt{merge}: $O(n)$ time and memory.
+\end{itemize}
+
+Total complexity: $O(n)$ time and $O(n)$ space.
+
+\section{Edge Cases}
+
+\begin{itemize}
+    \item \textbf{Multiple earliest records}: Not possible due to primary key constraint on \texttt{(player\_id, event\_date)}.
+    \item \textbf{Single-record players}: These are trivially handled.
+    \item \textbf{Missing values}: Assumed absent in valid activity logs.
+    \item \textbf{Unsorted input}: Sorting is not required since \texttt{min()} identifies the earliest timestamp directly.
+\end{itemize}
+
+\section{Conclusion}
+
+SQL and Pandas provide structurally parallel solutions for determining the earliest device used by each player. Both rely on computing a grouped minimum over timestamps followed by alignment with the original records. Their linear time complexities make them suitable for large-scale activity datasets and broader temporal analytics applications.
+
+\end{document}

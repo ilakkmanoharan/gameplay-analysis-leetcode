@@ -1,0 +1,44 @@
+\begin{figure}[h!]
+    \centering
+    \begin{tikzpicture}[
+        node distance=1.6cm,
+        every node/.style={font=\small},
+        process/.style={rectangle, rounded corners, draw=black, fill=blue!10, text width=5.2cm, align=center, minimum height=1.2cm},
+        decision/.style={diamond, draw=black, fill=green!10, aspect=2, align=center, minimum height=1.2cm},
+        startstop/.style={ellipse, draw=black, fill=red!10, align=center, minimum height=1.2cm, text width=3cm},
+        arrow/.style={->, thick}
+    ]
+    
+    % Nodes
+    \node[startstop] (start) {Start};
+    
+    \node[process, below of=start] (load) 
+        {Input: Activity table \\ (player\_id, device\_id, event\_date, games\_played)};
+    
+    \node[process, below of=load] (group)
+        {Group records by \\ \textbf{player\_id}};
+    
+    \node[process, below of=group] (min)
+        {Compute earliest \\ \textbf{event\_date} per player};
+    
+    \node[process, below of=min] (merge)
+        {Join (SQL) or Merge (Pandas) \\ grouped results back to Activity \\ on (player\_id, event\_date)};
+    
+    \node[process, below of=merge] (select)
+        {Select columns: \\ \textbf{player\_id, device\_id}};
+    
+    \node[startstop, below of=select] (end)
+        {Output result};
+    
+    % Arrows
+    \draw[arrow] (start) -- (load);
+    \draw[arrow] (load) -- (group);
+    \draw[arrow] (group) -- (min);
+    \draw[arrow] (min) -- (merge);
+    \draw[arrow] (merge) -- (select);
+    \draw[arrow] (select) -- (end);
+    
+    \end{tikzpicture}
+    \caption{Flowchart for Determining First Device Used by Each Player}
+    \end{figure}
+    
